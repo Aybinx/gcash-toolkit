@@ -1,0 +1,169 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: transactions
+// Document ID: {transactionId}
+// Fields:
+//   - id: string (required, immutable) - Unique transaction ID
+//   - type: string (required, immutable) - enum ['in', 'out', 'misc']
+//   - miscSubtype: string (optional, immutable) - enum ['add', 'deduct']
+//   - amount: number (required, >= 0) - Principal amount
+//   - fee: number (required, >= 0) - Service fee
+//   - timestamp: number (required, immutable) - Creation time
+//   - note: string (optional, max 500 chars)
+//   - uid: string (required, immutable) - User owner ID
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} { allow read, write: if false; }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || isAdminEmail());
+    }
+
+    function isAdminEmail() {
+      return isSignedIn() && (
+        request.auth.token.email == "aybin0718@gmail.com" || 
+        request.auth.token.email == "ibet1284@gmail.com"
+      );
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isAdminEmail() && isVerified();
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // ===============================================================
+    // Validation Blueprints
+    // ===============================================================
+
+    function isValidTransaction(data, isUpdate) {
+      return data.keys().hasAll(['id', 'type', 'amount', 'fee', 'timestamp', 'uid', 'walletId', 'personId']) &&
+             data.keys().size() <= 25 &&
+             data.id is string && data.id.size() > 0 &&
+             data.type in ['in', 'out', 'misc'] &&
+             (!('miscSubtype' in data) || data.miscSubtype in ['add', 'deduct']) &&
+             data.amount is number &&
+             data.fee is number && data.fee >= 0 &&
+             data.timestamp is number &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 1000)) &&
+             data.uid == request.auth.uid &&
+             data.walletId is string &&
+             data.personId is string &&
+             (!('isDebt' in data) || data.isDebt is bool) &&
+             (!('debtStatus' in data) || data.debtStatus in ['unpaid', 'paid']) &&
+             (!('debtorName' in data) || (data.debtorName is string)) &&
+             (!('paidAmount' in data) || (data.paidAmount is number)) &&
+             (!('isPayout' in data) || data.isPayout is bool) &&
+             (!('payoutStatus' in data) || data.payoutStatus in ['unclaimed', 'claimed']) &&
+             (!('recipientName' in data) || (data.recipientName is string)) &&
+             (!('claimedAmount' in data) || (data.claimedAmount is number)) &&
+             (!('refNumber' in data) || (data.refNumber is string)) &&
+             (!('updatedAt' in data) || data.updatedAt is number);
+    }
+
+    function isValidWallet(data) {
+      return data.keys().hasAll(['id', 'name', 'balance', 'uid', 'personId', 'updatedAt']) &&
+             data.keys().size() == 6 &&
+             data.id is string &&
+             data.name is string && data.name.size() > 0 &&
+             data.balance is number &&
+             data.uid == request.auth.uid &&
+             data.personId is string &&
+             data.updatedAt is number;
+    }
+
+    function isValidPerson(data) {
+      return data.keys().hasAll(['id', 'name', 'uid', 'createdAt']) &&
+             data.keys().size() == 4 &&
+             data.id is string &&
+             data.name is string && data.name.size() > 0 &&
+             data.uid == request.auth.uid &&
+             data.createdAt is number;
+    }
+
+    function isValidUserSettings(data) {
+      return data.keys().hasAll(['uid', 'reportingEmail', 'autoSendEnabled']) &&
+             data.keys().size() <= 10 &&
+             data.uid == request.auth.uid &&
+             data.reportingEmail is string && data.reportingEmail.size() <= 128 &&
+             (!('resendApiKey' in data) || (data.resendApiKey is string && data.resendApiKey.size() <= 256)) &&
+             data.autoSendEnabled is bool &&
+             (!('feeConfig' in data) || data.feeConfig is map) &&
+             (!('serviceRateNotes' in data) || data.serviceRateNotes is list) &&
+             (!('gcashNumber' in data) || (data.gcashNumber is string && data.gcashNumber.size() <= 20)) &&
+             (!('gcashQrUrl' in data) || (data.gcashQrUrl is string && data.gcashQrUrl.size() <= 500));
+    }
+
+    function isValidSharedReport(data) {
+      return data.keys().hasAll(['id', 'uid', 'personName', 'month', 'data', 'createdAt']) &&
+             data.id is string &&
+             data.uid == request.auth.uid &&
+             data.createdAt is number;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /transactions/{transactionId} {
+      allow get: if isOwner(existing().uid) || isAdmin();
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidTransaction(incoming(), false);
+      allow update: if isOwner(existing().uid) && isValidTransaction(incoming(), true) && incoming().uid == existing().uid;
+      allow delete: if isOwner(existing().uid) || isAdmin();
+    }
+    
+    match /wallets/{walletId} {
+      allow get: if isOwner(existing().uid) || isAdmin();
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidWallet(incoming());
+      allow update: if isOwner(existing().uid) && isValidWallet(incoming()) && incoming().uid == existing().uid;
+      allow delete: if isOwner(existing().uid) || isAdmin();
+    }
+
+    match /people/{personId} {
+      allow get: if isOwner(existing().uid) || isAdmin();
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidPerson(incoming());
+      allow update: if isOwner(existing().uid) && isValidPerson(incoming()) && incoming().uid == existing().uid;
+      allow delete: if isOwner(existing().uid) || isAdmin();
+    }
+
+    match /shared_reports/{reportId} {
+      allow read: if true; 
+      allow create: if isVerified() && isValidSharedReport(incoming());
+      allow delete: if isOwner(existing().uid) || isAdmin();
+      allow update: if false;
+    }
+
+    match /user_settings/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) && isValidUserSettings(incoming());
+      allow delete: if false;
+    }
+  }
+}

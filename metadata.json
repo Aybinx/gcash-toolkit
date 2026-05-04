@@ -1,0 +1,6 @@
+{
+  "name": "GCash Store Toolkit",
+  "description": "A specialized transaction calculator and tracker for store owners offering GCash cash-in and cash-out services with custom fee logic.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

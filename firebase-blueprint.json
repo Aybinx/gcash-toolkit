@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A record linked to a specific person and their wallet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID" },
+        "type": { "type": "string", "enum": ["in", "out", "misc"] },
+        "miscSubtype": { "type": "string", "enum": ["add", "deduct"] },
+        "amount": { "type": "number" },
+        "fee": { "type": "number" },
+        "timestamp": { "type": "number" },
+        "note": { "type": "string" },
+        "uid": { "type": "string", "description": "The manager's UID" },
+        "personId": { "type": "string", "description": "The ID of the managed person" },
+        "walletId": { "type": "string", "description": "The ID of the person's wallet" },
+        "isDebt": { "type": "boolean" },
+        "debtStatus": { "type": "string", "enum": ["unpaid", "paid"] },
+        "debtorName": { "type": "string" },
+        "paidAmount": { "type": "number" },
+        "isPayout": { "type": "boolean" },
+        "payoutStatus": { "type": "string", "enum": ["unclaimed", "claimed"] },
+        "recipientName": { "type": "string" },
+        "claimedAmount": { "type": "number" },
+        "refNumber": { "type": "string", "description": "External reference number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "type", "amount", "fee", "timestamp", "uid", "personId", "walletId"]
+    },
+    "Wallet": {
+      "title": "Wallet",
+      "description": "An account for a specific person",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "balance": { "type": "number" },
+        "uid": { "type": "string", "description": "Manager's UID" },
+        "personId": { "type": "string", "description": "The ID of the person who owns this wallet" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "balance", "uid", "personId", "updatedAt"]
+    },
+    "ManagedPerson": {
+      "title": "Managed Person",
+      "description": "A person/profile being managed by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "uid": { "type": "string", "description": "Manager's UID" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "uid", "createdAt"]
+    },
+    "SharedReport": {
+      "title": "Shared Report",
+      "description": "A public/read-only snapshot of a monthly report shared with investors",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "personName": { "type": "string" },
+        "month": { "type": "string" },
+        "data": { "type": "object", "description": "Snapshot of wallet totals and monthly totals" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "uid", "personName", "month", "data", "createdAt"]
+    },
+    "UserSettings": {
+      "title": "User Settings",
+      "description": "Configuration for the manager/owner",
+      "type": "object",
+      "properties": {
+        "reportingEmail": { "type": "string" },
+        "autoSendEnabled": { "type": "boolean" },
+        "uid": { "type": "string" },
+        "resendApiKey": { "type": "string", "description": "Resend API Key for the user" },
+        "feeConfig": {
+          "type": "object",
+          "properties": {
+            "baseIncrement": { "type": "number", "description": "Fee per 1000 units" },
+            "midThreshold": { "type": "number", "description": "Amount below 1000 that triggers partial fee" },
+            "midFee": { "type": "number", "description": "Fee for amounts below midThreshold" },
+            "fullFee": { "type": "number", "description": "Fee for amounts above midThreshold but below 1000" }
+          }
+        },
+        "serviceRateNotes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Customizable text labels for the service rates display"
+        },
+        "gcashNumber": { "type": "string", "description": "The GCash number of the store owner" },
+        "gcashQrUrl": { "type": "string", "description": "The URL of the GCash QR code image" }
+      },
+      "required": ["uid"]
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Collection of all transactions"
+    },
+    "/wallets/{walletId}": {
+      "schema": "Wallet",
+      "description": "Managed account balances"
+    },
+    "/people/{personId}": {
+      "schema": "ManagedPerson",
+      "description": "Profiles managed by the user"
+    },
+    "/shared_reports/{reportId}": {
+      "schema": "SharedReport",
+      "description": "Snapshots for investor sharing"
+    },
+    "/user_settings/{uid}": {
+      "schema": "UserSettings",
+      "description": "Global settings for the store owner"
+    }
+  }
+}
